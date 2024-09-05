@@ -18,6 +18,8 @@ This bag of words will later be used to train different machine-learning algorit
 
 # Gene types and distribution:
 
+The distribution data shows the distribution of each class using k-length = 4. Other values of k-mer length can obviously be used for the task. 
+
 ![image](https://github.com/user-attachments/assets/894780c2-8954-4948-bfc1-bf5623ed2920)
 ![image](https://github.com/user-attachments/assets/6dc5a3e6-213d-4d01-a656-bb064b97b708)
 
