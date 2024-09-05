@@ -1,0 +1,119 @@
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, accuracy_score, precision_recall_fscore_support
+from sklearn.preprocessing import OneHotEncoder
+
+def relu(x):
+    return np.maximum(0, x)
+
+def relu_derivative(x):
+    return (x > 0).astype(float)
+
+def softmax(x):
+    e_x = np.exp(x - np.max(x, axis=1, keepdims=True))
+    return e_x / np.sum(e_x, axis=1, keepdims=True)
+
+class NeuralNetwork:
+    def __init__(self, input_size, hidden_size, output_size, class_weights, regularization_lambda=0.01):
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.class_weights = class_weights
+        self.regularization_lambda = regularization_lambda
+        # Initialize weights and biases
+        self.W1 = np.random.randn(self.input_size, self.hidden_size) * np.sqrt(2. / self.input_size)
+        self.b1 = np.zeros((1, self.hidden_size))
+        self.W2 = np.random.randn(self.hidden_size, self.hidden_size) * np.sqrt(2. / self.hidden_size)
+        self.b2 = np.zeros((1, self.hidden_size))
+        self.W3 = np.random.randn(self.hidden_size, self.hidden_size) * np.sqrt(2. / self.hidden_size)
+        self.b3 = np.zeros((1, self.hidden_size))
+        self.W4 = np.random.randn(self.hidden_size, self.output_size) * np.sqrt(2. / self.hidden_size)
+        self.b4 = np.zeros((1, self.output_size))
+
+    def forward(self, X):
+        self.z1 = np.dot(X, self.W1) + self.b1
+        self.a1 = relu(self.z1)
+        self.z2 = np.dot(self.a1, self.W2) + self.b2
+        self.a2 = relu(self.z2)
+        self.z3 = np.dot(self.a2, self.W3) + self.b3
+        self.a3 = relu(self.z3)
+        self.z4 = np.dot(self.a3, self.W4) + self.b4
+        self.a4 = softmax(self.z4)
+        return self.a4
+
+    def compute_loss(self, y_pred, y_true):
+        m = y_true.shape[0]
+        clipped_pred = np.clip(y_pred, 1e-7, 1 - 1e-7)
+        cross_entropy_loss = -np.mean(np.sum(y_true * np.log(clipped_pred) * self.class_weights, axis=1))
+        l2_penalty = (self.regularization_lambda / (2 * m)) * (np.sum(np.square(self.W1)) + np.sum(np.square(self.W2)) + np.sum(np.square(self.W3)) + np.sum(np.square(self.W4)))
+        return cross_entropy_loss + l2_penalty
+
+    def backward(self, X, y, learning_rate):
+        m = y.shape[0]
+        error = self.a4 - y
+        dW4 = (np.dot(self.a3.T, error) + self.regularization_lambda * self.W4) / m
+        db4 = np.sum(error, axis=0) / m
+        error3 = np.dot(error, self.W4.T) * relu_derivative(self.a3)
+        dW3 = (np.dot(self.a2.T, error3) + self.regularization_lambda * self.W3) / m
+        db3 = np.sum(error3, axis=0) / m
+        error2 = np.dot(error3, self.W3.T) * relu_derivative(self.a2)
+        dW2 = (np.dot(self.a1.T, error2) + self.regularization_lambda * self.W2) / m
+        db2 = np.sum(error2, axis=0) / m
+        error1 = np.dot(error2, self.W2.T) * relu_derivative(self.a1)
+        dW1 = (np.dot(X.T, error1) + self.regularization_lambda * self.W1) / m
+        db1 = np.sum(error1, axis=0) / m
+        # Update weights and biases
+        self.W4 -= learning_rate * dW4
+        self.b4 -= learning_rate * db4
+        self.W3 -= learning_rate * dW3
+        self.b3 -= learning_rate * db3
+        self.W2 -= learning_rate * dW2
+        self.b2 -= learning_rate * db2
+        self.W1 -= learning_rate * dW1
+        self.b1 -= learning_rate * db1
+
+    def train(self, X, y, learning_rate=0.0005, epochs=10000):
+        for epoch in range(epochs):
+            y_pred = self.forward(X)
+            loss = self.compute_loss(y_pred, y)
+            self.backward(X, y, learning_rate)
+            if epoch % 1000 == 0:
+                print(f'Epoch {epoch}, Loss: {loss}')
+
+    def predict(self, X):
+        y_pred = self.forward(X)
+        return np.argmax(y_pred, axis=1)
+
+# Assuming 'human_data' is your DataFrame, loaded and preprocessed accordingly
+X = human_data.drop('label', axis=1).values  # Convert to numpy array
+y = human_data['label'].values
+
+# Load and prepare data
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+encoder = OneHotEncoder(sparse=False)
+y_train_one_hot = encoder.fit_transform(y_train.reshape(-1, 1))
+y_test_one_hot = encoder.transform(y_test.reshape(-1, 1))
+
+# Calculate class weights inversely proportional to class frequencies
+class_frequencies = np.sum(y_train_one_hot, axis=0)
+total_samples = np.sum(class_frequencies)
+class_weights = total_samples / (class_frequencies * len(class_frequencies))
+
+# Initialize and train the neural network
+nn = NeuralNetwork(input_size=X_train.shape[1], hidden_size=100, output_size=7, class_weights=class_weights, regularization_lambda=0.01)
+nn.train(X_train, y_train_one_hot, learning_rate=0.0005, epochs=10000)
+
+# Make predictions
+predictions = nn.predict(X_test)
+
+# Evaluate the model
+cm = confusion_matrix(np.argmax(y_test_one_hot, axis=1), predictions)
+accuracy = accuracy_score(np.argmax(y_test_one_hot, axis=1), predictions)
+precision, recall, f1, _ = precision_recall_fscore_support(np.argmax(y_test_one_hot, axis=1), predictions, average='macro')
+
+print("Confusion Matrix:\n", cm)
+print("Accuracy:", accuracy)
+print("Precision per class:", precision)
+print("Recall per class:", recall)
+print("F1 Score per class:", f1)
