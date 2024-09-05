@@ -37,7 +37,7 @@ estimate the total probability for the whole piece of data.
 
 *1- Smoothing value*
 
-**Support vector machines** are linear classifiers that can sort data into different classes based on their linear
+**Support vector machine** is a linear classifier that can sort data into different classes based on linear
 separation. Each k-mer in a sequence is affected by a weight
 value added up, and then the whole sequence is affected by a bias
 value. The bias and weight values are then adjusted as the model
