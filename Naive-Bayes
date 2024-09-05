@@ -1,1 +1,125 @@
+import numpy as np  # Import numpy for numerical operations
+import pandas as pd  # Import pandas for data manipulation
+
+# Function to compute confusion matrix for multiclass classification
+def confusion_matrix(y_true, y_pred, classes):
+    """Compute confusion matrix for multiclass classification."""
+    matrix = np.zeros((len(classes), len(classes)), dtype=int)
+    for i, true_class in enumerate(classes):
+        for j, pred_class in enumerate(classes):
+            matrix[i, j] = np.sum((y_true == true_class) & (y_pred == pred_class))
+    return matrix
+
+# Function to calculate the overall accuracy of the model
+def calculate_accuracy(y_true, y_pred):
+    """Calculate the overall accuracy of the model."""
+    return np.mean(y_true == y_pred)
+
+# Function to calculate precision, recall, and F1-score for each class
+def precision_recall_fscore(y_true, y_pred, classes):
+    """Calculate precision, recall, and F1-score for each class."""
+    precision = {}
+    recall = {}
+    f1_score = {}
+
+    for class_ in classes:
+        tp = np.sum((y_true == class_) & (y_pred == class_))
+        fp = np.sum((y_true != class_) & (y_pred == class_))
+        fn = np.sum((y_true == class_) & (y_pred != class_))
+
+        precision[class_] = tp / (tp + fp) if tp + fp > 0 else 0
+        recall[class_] = tp / (tp + fn) if tp + fn > 0 else 0
+        f1_score[class_] = 2 * precision[class_] * recall[class_] / (precision[class_] + recall[class_]) if precision[class_] + recall[class_] > 0 else 0
+
+    return precision, recall, f1_score
+
+# Function to split data into train and test sets with stratified sampling
+def split_data_stratified(X, y, test_size=0.2, random_state=42):
+    """Split data into train and test sets with stratified sampling."""
+    np.random.seed(random_state)
+    # Find unique classes and their counts
+    unique_classes, class_counts = np.unique(y, return_counts=True)
+    # Calculate number of samples to include in the test set for each class
+    test_class_counts = np.round(class_counts * test_size).astype(int)
+
+    # Initialize arrays to store indices for train and test sets
+    train_indices = []
+    test_indices = []
+
+    # Iterate over each class
+    for class_idx, class_count in enumerate(class_counts):
+        # Get indices for samples belonging to the current class
+        class_indices = np.where(y == unique_classes[class_idx])[0]
+        # Shuffle class indices
+        np.random.shuffle(class_indices)
+        # Split class indices into train and test indices based on test_class_counts
+        test_class_size = test_class_counts[class_idx]
+        test_indices.extend(class_indices[:test_class_size])
+        train_indices.extend(class_indices[test_class_size:])
+
+    # Shuffle train and test indices
+    np.random.shuffle(train_indices)
+    np.random.shuffle(test_indices)
+
+    # Split data into train and test sets based on indices
+    X_train, X_test = X[train_indices], X[test_indices]
+    y_train, y_test = y[train_indices], y[test_indices]
+
+    return X_train, X_test, y_train, y_test
+
+# Naive Bayes Classifier with Laplace Smoothing
+class MultinomialNaiveBayes:
+    def __init__(self, alpha=1.0):
+        self.alpha = alpha
+        self.class_log_prior_ = None
+        self.feature_log_prob_ = None
+        self.classes_ = None
+
+    def fit(self, X, y):
+        count_sample = X.shape[0]
+        self.classes_ = np.unique(y)
+        num_classes = len(self.classes_)
+        self.class_log_prior_ = np.log((np.bincount(y) + self.alpha) / (count_sample + self.alpha * num_classes))
+        self.feature_log_prob_ = np.zeros((num_classes, X.shape[1]))
+        for i, c in enumerate(self.classes_):
+            X_c = X[y == c]
+            self.feature_log_prob_[i, :] = np.log((X_c.sum(axis=0) + self.alpha) / (X_c.sum() + self.alpha * X.shape[1]))
+
+    def predict(self, X):
+        jll = self._joint_log_likelihood(X)
+        return self.classes_[np.argmax(jll, axis=1)]
+
+    def _joint_log_likelihood(self, X):
+        return np.dot(X, self.feature_log_prob_.T) + self.class_log_prior_
+
+# Main execution flow
+def train_and_evaluate(X_train, X_test, y_train, y_test, alpha=1.0):
+    """Train and evaluate the Naive Bayes model."""
+    model = MultinomialNaiveBayes(alpha=alpha)
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+
+    # Evaluation
+    classes = np.unique(y_train)
+    cm = confusion_matrix(y_test, y_pred, classes)
+    accuracy = calculate_accuracy(y_test, y_pred)
+    precision, recall, f1 = precision_recall_fscore(y_test, y_pred, classes)
+
+    return cm, accuracy, precision, recall, f1
+
+# Function to compare all accuracies
+def compare_accuracies(results):
+    """Compare accuracies of different parameter combinations."""
+    results_df = pd.DataFrame(results)
+    sorted_results_df = results_df.sort_values(by='Accuracy', ascending=False)
+    print("Parameter Combinations and Accuracies:")
+    print(sorted_results_df)
+
+# Define parameters
+alphas = [0.1, 1.0]
+regularization_lambda = [0.01, 0.1]
+training_epochs = [1000, 5000, 10000]
+learning_rates = [0.001, 0.0005]
+hidden_sizes = [10, 50, 100, 500]
+
 
