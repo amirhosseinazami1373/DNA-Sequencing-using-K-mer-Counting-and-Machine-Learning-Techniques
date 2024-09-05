@@ -1,0 +1,113 @@
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+
+# Function to split data
+def split_data(X, y, test_size=0.2, random_state=42):
+    np.random.seed(random_state)
+    indices = np.random.permutation(X.shape[0])
+    split_idx = int(X.shape[0] * test_size)
+    training_idx, test_idx = indices[:-split_idx], indices[-split_idx:]
+    X_train, X_test = X[training_idx], X[test_idx]
+    y_train, y_test = y[training_idx], y[test_idx]
+    return X_train, X_test, y_train, y_test
+
+# Define a simple Linear SVM
+class LinearSVM:
+    def __init__(self, C=1.0, learning_rate=0.0001, n_iters=10000, batch_size=1000):
+        self.C = C  # Regularization parameter
+        self.learning_rate = learning_rate
+        self.n_iters = n_iters
+        self.batch_size = batch_size
+        self.weights = None
+        self.bias = None
+
+    def fit(self, X, y):
+        n_samples, n_features = X.shape
+        self.weights = np.zeros(n_features)
+        self.bias = 0
+        y_ = np.where(y <= 0, -1, 1)
+
+        for _ in range(self.n_iters):
+            for start in range(0, n_samples, self.batch_size):
+                end = start + self.batch_size
+                X_batch = X[start:end]
+                y_batch = y_[start:end]
+                decision = np.dot(X_batch, self.weights) + self.bias
+                margin = y_batch * decision
+                misclassified = margin < 1
+                delta_weights = np.dot(X_batch[misclassified].T, y_batch[misclassified])
+                delta_bias = np.sum(y_batch[misclassified])
+                # Update weights and bias considering C
+                self.weights += self.learning_rate * (self.C * delta_weights - 2 * self.weights)
+                self.bias += self.learning_rate * delta_bias
+
+    def predict(self, X):
+        linear_output = np.dot(X, self.weights) + self.bias
+        return np.sign(linear_output)
+
+# One-vs-Rest strategy for handling multiclass classification
+class OvRLinearSVM:
+    def __init__(self, C=1.0, learning_rate=0.0001, n_iters=10000):
+        self.C = C
+        self.learning_rate = learning_rate
+        self.n_iters = n_iters
+        self.classifiers = []
+
+    def fit(self, X, y):
+        self.classes_ = np.unique(y)
+        for cls in self.classes_:
+            svm = LinearSVM(C=self.C, learning_rate=self.learning_rate, n_iters=self.n_iters)
+            binary_y = np.where(y == cls, 1, -1)
+            svm.fit(X, binary_y)
+            self.classifiers.append(svm)
+
+    def predict(self, X):
+        predictions = np.array([svm.predict(X) for svm in self.classifiers]).T
+        return self.classes_[np.argmax(predictions, axis=1)]
+
+# Evaluation metrics
+def confusion_matrix(y_true, y_pred):
+    classes = np.unique(y_true)
+    cm = np.zeros((len(classes), len(classes)), dtype=int)
+    for i, true_label in enumerate(classes):
+        for j, pred_label in enumerate(classes):
+            cm[i, j] = np.sum((y_true == true_label) & (y_pred == pred_label))
+    return cm
+
+def accuracy(y_true, y_pred):
+    return np.mean(y_true == y_pred)
+
+def precision_recall_fscore(y_true, y_pred, classes):
+    precision = []
+    recall = []
+    f1 = []
+    for cls in classes:
+        tp = np.sum((y_true == cls) & (y_pred == cls))
+        fp = np.sum((y_true != cls) & (y_pred == cls))
+        fn = np.sum((y_true == cls) & (y_pred != cls))
+        p = tp / (tp + fp) if (tp + fp) > 0 else 0
+        r = tp / (tp + fn) if (tp + fn) > 0 else 0
+        f = 2 * p * r / (p + r) if (p + r) > 0 else 0
+        precision.append(p)
+        recall.append(r)
+        f1.append(f)
+    return precision, recall, f1
+
+X = human_data.drop('label', axis=1).values  # Convert to numpy array
+y = human_data['label'].values
+# Example usage of the above classes and functions
+X_train, X_test, y_train, y_test = split_data(X, y)
+model = OvRLinearSVM(C=0.1)  # Initialize with a specific C value
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
+
+# Calculate and print evaluation metrics
+cm = confusion_matrix(y_test, y_pred)
+acc = accuracy(y_test, y_pred)
+precision, recall, f1 = precision_recall_fscore(y_test, y_pred, np.unique(y_train))
+print("Confusion Matrix:\n", cm)
+print("Accuracy:", acc)
+print("Precision per class:", precision)
+print("Recall per class:", recall)
+print("F1 Score per class:", f1)
