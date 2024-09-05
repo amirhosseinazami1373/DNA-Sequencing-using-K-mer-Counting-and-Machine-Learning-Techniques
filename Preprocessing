@@ -1,0 +1,65 @@
+import pandas as pd
+from collections import Counter
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+def generate_kmers(sequence, k):
+    """
+    Generates k-mers for a given sequence.
+    """
+    return [sequence[i:i+k] for i in range(len(sequence) - k + 1)]
+
+def read_and_process_data(file_path, k):
+    sequences = []
+    labels = []
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+        print("Number of lines read:", len(lines))  # Debug print
+        for line in lines:
+            # Trim and check if the line is empty or looks like a header
+            trimmed_line = line.strip()
+            if not trimmed_line or 'sequence' in trimmed_line:
+                continue  # Skip empty lines or header
+
+            # Split the line into sequence and label parts
+            parts = trimmed_line.split('\t')
+            if len(parts) != 2:
+                print("Skipped line (improper format):", trimmed_line)  # Debug print
+                continue
+
+            sequence, label_part = parts
+            try:
+                label = int(label_part)
+                sequences.append(sequence)
+                labels.append(label)
+            except ValueError:
+                print("Skipped line due to ValueError in label conversion:", trimmed_line)  # Debug print
+                continue
+
+    # Generate k-mers for each sequence
+    kmer_dicts = [Counter(generate_kmers(seq, k)) for seq in sequences]
+
+    # Create the bag-of-words DataFrame
+    bow_df = pd.DataFrame.from_records(kmer_dicts).fillna(0).astype(int)
+    bow_df['label'] = labels
+
+    return bow_df
+
+# Replace 'path_to_human.txt' with the actual path to your dataset
+human_data = read_and_process_data('human.txt', k=4)
+print(human_data.head())
+
+# Assuming 'human_data' is your DataFrame
+class_distribution = human_data['label'].value_counts()
+print("Class Distribution:\n", class_distribution)
+
+# Set the aesthetic style of the plots
+sns.set(style="whitegrid")
+
+# Create a bar plot of the class distribution
+plt.figure(figsize=(10, 6))
+class_distribution_plot = sns.barplot(x=class_distribution.index, y=class_distribution.values)
+class_distribution_plot.set_title('Distribution of Classes')
+class_distribution_plot.set_xlabel('Class Labels')
+class_distribution_plot.set_ylabel('Frequency')
+plt.show()
